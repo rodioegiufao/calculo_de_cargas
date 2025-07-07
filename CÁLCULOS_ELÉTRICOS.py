@@ -7,6 +7,7 @@ import math
 import pathlib
 from io import BytesIO
 import os  # Adicionado para manipulação de caminhos
+import plotly.express as px
 
 st.set_page_config(layout="wide", page_title="Dimensionamento Elétrico")
 
@@ -76,35 +77,30 @@ def calcular_dimensionamento(nome_quadro, fp, fd, dist, pr, ps, pt, tensao):
             c_qds.append(c_med * (p[i] / sum_pot))
     
     # Determinar queda de tensão
-    qd = []
-    for i in range(len(cb_voltenax_corrente)):
-        qd.append((dist * cb_voltenax_095_qd[i] * c_med) / (10 * tensao))
-    
+    # Determinar queda de tensão para 1 cabo
+    qd = [(dist * r * c_med) / (10 * tensao) for r in cb_voltenax_095_qd]
+
     n = 0
     cabo = ""
     terra = ""
     queda = 0
     dj = 0  # Inicializa o disjuntor
+    max_cabos = 5  # Altere conforme o número máximo de cabos em paralelo que deseja testar
 
-    # Primeira tentativa: 1 cabo
-    for i in range(len(cb_voltenax_corrente)):
-        if c_med < cb_voltenax_corrente[i] and qd[i] < 3:
-            queda = qd[i]
-            cabo = f"{cb_voltenax_bitola[i]}"
-            terra = f"{cb_voltenax_terra[i]}"
-            n = 1
-            break
-
-    # Segunda tentativa: múltiplos cabos
-    if n == 0:
+    # Tenta de 1 até max_cabos cabos
+    for n_cabos in range(1, max_cabos + 1):
         for i in range(len(cb_voltenax_corrente)):
-            if c_med/2 < cb_voltenax_corrente[i] and qd[i]/2 < 3:
-                queda = qd[i]/2
-                cabo = f"2x{cb_voltenax_bitola[i]}"
-                terra = f"{cb_voltenax_terra[i]}"
-                n = 2
+            corrente_limite = cb_voltenax_corrente[i] * n_cabos
+            queda_total = qd[i] / n_cabos
+            if c_med < corrente_limite and queda_total < 3:  # ou 3.5 se quiser afrouxar
+                queda = queda_total
+                cabo = f"{n_cabos}x{cb_voltenax_bitola[i]}"
+                terra = cb_voltenax_terra[i]  # pode mudar se quiser 1 terra por fase
+                n = n_cabos
                 break
-    
+        if n > 0:
+            break                                                                                               
+
     # Disjuntor
     if c_med < 32:
         dj = 32
@@ -251,7 +247,6 @@ with tab2:
                 "Tipo": ["Potência"] * 3 + ["Demanda"] * 3
             })
 
-            import plotly.express as px
             fig = px.bar(
                 df_plot,
                 x="Fase",
@@ -304,19 +299,83 @@ with tab2:
         
         # Adicionar seção de análise geral
         st.subheader("Análise Geral")
-        
+
         # Criar métricas resumidas
-        col_met1, col_met2, col_met3 = st.columns(3)
-        
+        col_met1, col_met2, col_met3, col_met4 = st.columns(4)
+
+        # Calcular totais
+        potencia_total = df['POT. TOTAL (W)'].sum()
+        demanda_total = df['DEM. TOTAL (VA)'].sum()
+        corrente_media = df['COR. MÉDIA (A)'].mean()
+
+        # Tamanhos padrão de subestações (em kVA)
+        subestacoes = [75, 112.5, 225, 300, 500, 750, 1000, 1250, 1500, 1750, 2000]
+        demanda_kva = demanda_total / 1000  # Converter VA para kVA
+
+        # Encontrar a subestação adequada
+        subestacao_recomendada = min([s for s in subestacoes if s >= demanda_kva], default=subestacoes[-1])
+
         with col_met1:
-            st.metric("Potência Total Instalada", f"{df['POT. TOTAL (W)'].sum():,.2f} W")
-        
+            st.metric("Potência Total Instalada", f"{potencia_total:,.2f} W")
+
         with col_met2:
-            st.metric("Demanda Total Calculada", f"{df['DEM. TOTAL (VA)'].sum():,.2f} VA")
-        
+            st.metric("Demanda Total Calculada", f"{demanda_total:,.2f} VA")
+
         with col_met3:
-            st.metric("Corrente Média Total", f"{df['COR. MÉDIA (A)'].mean():.2f} A")
-    
+            st.metric("Corrente Média Total", f"{corrente_media:.2f} A")
+
+        with col_met4:
+            st.metric("Subestação Recomendada", 
+                    f"{subestacao_recomendada} kVA",
+                    help=f"Baseado na demanda total de {demanda_kva:.2f} kVA")
+
+        # Adicionar gráfico de comparação com as subestações
+        st.subheader("Dimensionamento da Subestação")
+
+        # Criar DataFrame para o gráfico
+        df_subestacao = pd.DataFrame({
+            'Capacidade (kVA)': subestacoes,
+            'Tipo': 'Disponível'
+        })
+
+        # Adicionar demanda atual
+        df_demanda = pd.DataFrame({
+            'Capacidade (kVA)': [demanda_kva],
+            'Tipo': 'Demanda Calculada'
+        })
+
+        df_plot = pd.concat([df_subestacao, df_demanda])
+
+        # Plotar gráfico
+        fig = px.bar(df_plot, 
+                    x='Capacidade (kVA)', 
+                    y='Tipo', 
+                    color='Tipo',
+                    orientation='h',
+                    title=f'Demanda Calculada: {demanda_kva:.2f} kVA vs Capacidades de Subestação',
+                    text='Capacidade (kVA)',
+                    height=400)
+
+        # Destacar a recomendada
+        fig.add_vline(x=subestacao_recomendada, line_width=2, line_dash="dash", line_color="green",
+                    annotation_text=f"Recomendado: {subestacao_recomendada} kVA", 
+                    annotation_position="top right")
+
+        # Ajustar layout
+        fig.update_layout(showlegend=False)
+        fig.update_traces(texttemplate='%{text:.0f} kVA', textposition='outside')
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Adicionar explicação
+        st.info(f"""
+        **Legenda:**
+        - 🟦 Barras azuis: Capacidades padrão de subestações
+        - 🟧 Barra laranja: Sua demanda calculada ({demanda_kva:.2f} kVA)
+        - 🟩 Linha verde: Subestação recomendada ({subestacao_recomendada} kVA)
+
+        A subestação recomendada é a menor capacidade padrão que atende ou excede sua demanda calculada.
+        """)
     else:
         st.warning("Nenhum dado encontrado. Realize cálculos primeiro.")
 with tab3:
