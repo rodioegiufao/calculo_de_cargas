@@ -140,7 +140,7 @@ def calcular_dimensionamento(nome_quadro, fp, fd, dist, pr, ps, pt, tensao):
         "TENSÃO FASE (V)": tensao,
         "TENSÃO LINHA (V)": tensao_linha,
         "POT. TOTAL (W)": sum_pot,
-        "DEM. TOTAL (VA)": sum_pot / fp,
+        "DEM. TOTAL (VA)": (sum_pot*fd) / fp,
         "COR. MÉDIA (A)": c_med,
         "DIST.(M)": dist,
         "QUEDA DE TENSÃO (%)": queda,
