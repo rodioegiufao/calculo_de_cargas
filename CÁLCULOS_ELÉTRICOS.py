@@ -447,7 +447,7 @@ with tab3:
                     with pd.ExcelWriter(CAMINHO_ARQUIVO, engine='openpyxl') as writer:
                         df_filtrado.to_excel(writer, sheet_name='QD', index=False)
                     st.success(f"Quadro '{quadro_selecionado}' apagado com sucesso.")
-                    st.experimental_rerun()  # Atualiza a página para mostrar os dados atualizados
+                    st.rerun()  # Atualiza a página para mostrar os dados atualizados
                 except Exception as e:
                     st.error(f"Erro ao excluir: {str(e)}")
         
