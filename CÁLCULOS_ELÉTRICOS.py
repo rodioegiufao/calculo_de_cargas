@@ -149,28 +149,49 @@ def calcular_dimensionamento(nome_quadro, fp, fd, dist, pr, ps, pt, tensao):
         "DISJUNTOR": dj   # Disjuntor
     }
 
+# Função para verificar se o quadro é existente
+def nome_quadro_existe(nome_quadro):
+    try:
+        df = carregar_dados()
+        if not df.empty:
+            return nome_quadro in df["DESCRIÇÃO"].values
+        return False
+    except:
+        return False
+
+# Função para salvar os dados
 def salvar_no_excel(dados):
+    # Verifica se o nome do quadro já existe (verificação redundante por segurança)
+    if nome_quadro_existe(dados["DESCRIÇÃO"]):
+        st.error(f"Erro: O quadro '{dados['DESCRIÇÃO']}' já existe!")
+        return False
+    
     # Verifica se o arquivo existe, se não, cria
     if not pathlib.Path(CAMINHO_ARQUIVO).exists():
         criar_planilha_se_nao_existir()
     
-    ficheiro = openpyxl.load_workbook(CAMINHO_ARQUIVO)
-    
-    # Verifica se a planilha QD existe, se não, cria
-    if 'QD' not in ficheiro.sheetnames:
-        criar_planilha_se_nao_existir()
+    try:
         ficheiro = openpyxl.load_workbook(CAMINHO_ARQUIVO)
+        
+        # Verifica se a planilha QD existe, se não, cria
+        if 'QD' not in ficheiro.sheetnames:
+            criar_planilha_se_nao_existir()
+            ficheiro = openpyxl.load_workbook(CAMINHO_ARQUIVO)
+        
+        folha = ficheiro["QD"]
+        
+        nova_linha = folha.max_row + 1
+        
+        for col, valor in enumerate(dados.values(), start=1):
+            folha.cell(row=nova_linha, column=col, value=valor)
+        
+        ficheiro.save(CAMINHO_ARQUIVO)
+        st.success("Dados salvos com sucesso!")
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados: {str(e)}")
+        return False
     
-    folha = ficheiro["QD"]
-    
-    nova_linha = folha.max_row + 1
-    
-    for col, valor in enumerate(dados.values(), start=1):
-        folha.cell(row=nova_linha, column=col, value=valor)
-    
-    ficheiro.save(CAMINHO_ARQUIVO)
-    st.success("Dados salvos com sucesso!")
-
 def carregar_dados():
     try:
         df = pd.read_excel(CAMINHO_ARQUIVO, 
@@ -210,14 +231,19 @@ with tab1:
             pt = st.number_input("Potência - T (W):", min_value=0.0, step=100.0)
         
         if st.form_submit_button("Calcular e Salvar"):
-            # Primeiro cria a planilha se não existir
-            criar_planilha_se_nao_existir()
-    
-            # Depois calcula os dados
-            dados = calcular_dimensionamento(nome_quadro, fp, fd, dist, pr, ps, pt, tensao)
-    
-            # Finalmente salva
-            salvar_no_excel(dados)
+            # Verifica se o nome do quadro já existe
+            if nome_quadro_existe(nome_quadro):
+                st.error(f"Já existe um quadro com o nome '{nome_quadro}'. Por favor, use um nome diferente.")
+            else:
+                # Primeiro cria a planilha se não existir
+                criar_planilha_se_nao_existir()
+        
+                # Depois calcula os dados
+                dados = calcular_dimensionamento(nome_quadro, fp, fd, dist, pr, ps, pt, tensao)
+        
+                # Finalmente salva
+                salvar_no_excel(dados)
+                st.rerun()  # Atualiza a página para mostrar os dados atualizados
 
 with tab2:
     st.header("Visualização de Resultados")
@@ -453,7 +479,7 @@ with tab3:
                     
                     wb.save(CAMINHO_ARQUIVO)
                     st.success("Todos os quadros foram apagados com sucesso!")
-                    st.experimental_rerun()  # Atualiza a página para mostrar os dados atualizados
+                    st.rerun()# Atualiza a página para mostrar os dados atualizados
                 except Exception as e:
                     st.error(f"Erro ao apagar todos os quadros: {str(e)}")
         
