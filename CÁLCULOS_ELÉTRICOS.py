@@ -225,7 +225,7 @@ with tab1:
             fd = st.selectbox("Fator de Demanda:", [1.0, 0.9, 0.8, 0.7, 0.6, 0.5], index=0)
         
         with col2:
-            tensao = st.selectbox("Tensão (V):", [220, 380], index=0)
+            tensao = st.selectbox("Tensão de Linha(V):", [220, 380], index=0)
             pr = st.number_input("Potência - R (W):", min_value=0.0, step=100.0)
             ps = st.number_input("Potência - S (W):", min_value=0.0, step=100.0)
             pt = st.number_input("Potência - T (W):", min_value=0.0, step=100.0)
