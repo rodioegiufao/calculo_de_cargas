@@ -77,7 +77,6 @@ def calcular_dimensionamento(nome_quadro, fp, fd, dist, pr, ps, pt, tensao):
             c_qds.append(c_med * (p[i] / sum_pot))
     
     # Determinar queda de tensão
-    # Determinar queda de tensão para 1 cabo
     qd = [(dist * r * c_med) / (10 * tensao) for r in cb_voltenax_095_qd]
 
     n = 0
@@ -404,22 +403,60 @@ with tab3:
             st.error(f"Erro ao preparar download: {str(e)}")
 
         # Apagar arquivos caso necessário
-        st.subheader("Excluir Quadro de Carga")
+        st.subheader("Excluir Quadros de Carga")
 
         opcoes_quadro = df["DESCRIÇÃO"].tolist()
         quadro_selecionado = st.selectbox("Selecione o Quadro que deseja excluir:", opcoes_quadro)
 
-        if st.button("Apagar Quadro Selecionado"):
-            # Remove do DataFrame
-            df_filtrado = df[df["DESCRIÇÃO"] != quadro_selecionado]
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("Apagar Quadro Selecionado"):
+                # Remove do DataFrame
+                df_filtrado = df[df["DESCRIÇÃO"] != quadro_selecionado]
 
-            # Salva novamente o Excel (mantendo cabeçalho)
-            try:
-                CAMINHO_ARQUIVO = os.path.join(os.path.dirname(__file__), "Quadro_de_cargas.xlsx")
-                with pd.ExcelWriter(CAMINHO_ARQUIVO, engine='openpyxl') as writer:
-                    df_filtrado.to_excel(writer, sheet_name='QD', index=False)
-                st.success(f"Quadro '{quadro_selecionado}' apagado com sucesso.")
-            except Exception as e:
-                st.error(f"Erro ao excluir: {str(e)}")
+                # Salva novamente o Excel (mantendo cabeçalho)
+                try:
+                    CAMINHO_ARQUIVO = os.path.join(os.path.dirname(__file__), "Quadro_de_cargas.xlsx")
+                    with pd.ExcelWriter(CAMINHO_ARQUIVO, engine='openpyxl') as writer:
+                        df_filtrado.to_excel(writer, sheet_name='QD', index=False)
+                    st.success(f"Quadro '{quadro_selecionado}' apagado com sucesso.")
+                    st.experimental_rerun()  # Atualiza a página para mostrar os dados atualizados
+                except Exception as e:
+                    st.error(f"Erro ao excluir: {str(e)}")
+        
+        with col2:
+            if st.button("🗑️ Apagar TODOS os Quadros", type="primary"):
+                try:
+                    # Cria um novo arquivo Excel com apenas o cabeçalho
+                    wb = Workbook()
+                    folha = wb.active
+                    folha.title = "QD"
+                    
+                    # Adiciona os cabeçalhos
+                    headers = [
+                        "N°", "DESCRIÇÃO", "ATIVA-R", "ATIVA-S", "ATIVA-T",
+                        "DEM-R", "DEM-S", "DEM-T", "R", "S", "T", "FP",
+                        "FD", "TENSÃO FASE (V)", "TENSÃO LINHA (V)", "POT. TOTAL (W)",
+                        "DEM. TOTAL (VA)", "COR. MÉDIA (A)", "DIST.(M)", "QUEDA DE TENSÃO (%)",
+                        "FA", "NE", "TE", "DISJUNTOR"
+                    ]
+                    
+                    folha.append(headers)
+                    
+                    # Formatação do cabeçalho
+                    minha_borda = Side(border_style="thin", color='000000')
+                    for cell in folha[1]:
+                        cell.font = Font(color='ffffff', bold=True, size=12)
+                        cell.fill = PatternFill('solid', start_color="162B4E")
+                        cell.border = Border(top=minha_borda, left=minha_borda, right=minha_borda, bottom=minha_borda)
+                    
+                    wb.save(CAMINHO_ARQUIVO)
+                    st.success("Todos os quadros foram apagados com sucesso!")
+                    st.experimental_rerun()  # Atualiza a página para mostrar os dados atualizados
+                except Exception as e:
+                    st.error(f"Erro ao apagar todos os quadros: {str(e)}")
+        
+        st.warning("Atenção: Apagar todos os quadros é uma ação irreversível. Todos os dados serão perdidos, mantendo apenas o cabeçalho da planilha.")
     else:
         st.info("Nenhum dado salvo ainda. Realize cálculos na aba 'Cálculo'.")
